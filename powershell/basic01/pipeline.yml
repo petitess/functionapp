@@ -1,0 +1,21 @@
+pool:
+  name: 'home_pc'
+
+steps:
+  - task: ArchiveFiles@2
+    displayName: "Create zip artifact"
+    inputs:
+      rootFolderOrFile: '$(Agent.BuildDirectory)/s/functions'
+      includeRootFolder: false
+      archiveType: zip
+      archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+      replaceExistingArchive: true
+
+  - task: AzureFunctionApp@2
+    displayName: Deploy Azure Function
+    inputs:
+      azureSubscription: sp-subconnect-01
+      appType: functionApp
+      appName: func-cons-prod-01
+      package: '../a/$(Build.BuildId).zip'
+      deploymentMethod: auto
