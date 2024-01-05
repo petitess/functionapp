@@ -10,6 +10,9 @@ Get-Content C:\home\LogFiles\Application\Functions\Host\2024-01-01T10-12-13Z-63b
     - Server: waws-prod-xxx-xxx.ftp.azurewebsites.windows.net
     - User: func-xxx-prod-01\$func-xxx-prod-01
 - Login with WinSCP
+    - FTP
+    - SSL/TLS Implicit
+    - Port 990  
 ### Devops agent
 ##### Download
 ```pwsh
