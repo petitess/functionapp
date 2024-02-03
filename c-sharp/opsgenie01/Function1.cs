@@ -35,7 +35,7 @@ namespace func_opsgenie_01
 
             string alertId = opsgenieData.alert.alertId;
             string category = opsgenieData.alert.details.Category;
-            string contact = string.IsNullOrEmpty((opsgenieData.alert.details.Contact).ToString()) ? "opsgenie@b3.se" : (opsgenieData.alert.details.Contact).ToString();
+            string contact = string.IsNullOrEmpty((opsgenieData.alert.details.Contact).ToString()) ? "opsgenie@xx.se" : (opsgenieData.alert.details.Contact).ToString();
             string description = $"https://app.opsgenie.com/alert/detail/{opsgenieData.alert.alertId}";   
             string message = opsgenieData.alert.message;   
 
