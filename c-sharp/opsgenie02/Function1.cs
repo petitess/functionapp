@@ -135,15 +135,6 @@ namespace func_opsgenie_02
             }
             else
             {
-                //Get alert - temporary
-                var opsgenieAlert = await opsgenieClient.GetAsync(opsgenieBaseUrl +
-                    $"/alerts/{alertId}");
-                var alert = await opsgenieAlert.Content.ReadAsStringAsync();
-                var alertParsedJson = JObject.Parse(alert);
-                message = alertParsedJson.SelectToken("data.message").ToString();
-                Console.WriteLine("alertTile: " + alertParsedJson.SelectToken("data.message"));
-                Console.WriteLine("alertSeen: " + alertParsedJson?["data"]?["seen"]);
-
                 var pattern = @"\[([^]]*)\]";
                 string ticketId = Regex.Match(message, pattern).Groups[1].Value;
                 string user = opsgenieData.alert.username;
