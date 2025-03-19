@@ -48,4 +48,14 @@ public HttpResponseData Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "p
     return response;
 }
 ```
+```cs
+var host = new HostBuilder().ConfigureOpenApi()
+    .ConfigureFunctionsWebApplication()
+    .ConfigureServices(services =>
+    {
+        services.AddApplicationInsightsTelemetryWorkerService();
+        services.ConfigureFunctionsApplicationInsights();
+    })
+    .Build();
+```
 
