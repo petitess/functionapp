@@ -2,6 +2,7 @@
 
 ```pwsh
 Get-Content C:\home\LogFiles\Application\Functions\Host\2024-01-01T10-12-13Z-63b2546981.log | Select-Object -Last 50
+Get-Content C:\home\LogFiles\eventlog.xml | Select-Object -Last 50
 ```
 
 ### Login using FTP
