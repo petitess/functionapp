@@ -1,3 +1,8 @@
+#requirements.txt
+#azure-functions
+#azure-mgmt-resource
+#azure-identity
+
 import json
 import azure.functions as func
 from azure.identity import DefaultAzureCredential
