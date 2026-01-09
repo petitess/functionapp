@@ -1,0 +1,101 @@
+trigger: none
+#   branches:
+#     include:
+#     - main
+#   paths:
+#     exclude:
+#     - README.md
+#     - docs/*
+
+pool:
+  name: 'vmmgmtprod01' 
+  demands: 
+    - Agent.Name -equals vmmgmtprod01
+    - USERNAME -equals VMMGMTPROD01$
+
+variables:
+  azureSubscription: 'sub-abcd-prod-01'
+  functionAppName: 'func-aduser-prod-01'
+  resourceGroupName: 'rg-func-aduser-prod-sc-01'
+  pythonVersion: '3.13'
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+stages:
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Python Function App'
+    steps:
+    # Setup Python environment
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+        architecture: 'x64'
+      displayName: 'Use Python $(pythonVersion)'
+
+    # Create virtual environment and install dependencies
+    - script: |
+        python -m venv antenv
+        call antenv\Scripts\activate
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: 'Install Python dependencies'
+      workingDirectory: '$(workingDirectory)'
+
+    # Build function app (zip deployment)
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(workingDirectory)'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+        replaceExistingArchive: true
+        verbose: true
+      displayName: 'Create deployment package'
+
+    # Publish build artifacts
+    - publish: '$(Build.ArtifactStagingDirectory)'
+      artifact: 'drop'
+      displayName: 'Publish build artifacts'
+
+- stage: Deploy
+  displayName: 'Deploy Stage'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: DeployJob
+    displayName: 'Deploy to Azure Function App'
+    environment: 'prod'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          # Download build artifacts
+          - download: current
+            artifact: 'drop'
+            displayName: 'Download build artifacts'
+
+          # Deploy to Azure Function App
+          - task: AzureFunctionApp@2
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'functionAppLinux'
+              appName: '$(functionAppName)'
+              package: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+              deploymentMethod: 'zipDeploy'
+              runtimeStack: 'Python|3.10'
+            displayName: 'Deploy to Azure Function App'
+
+          # Verify deployment
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                Write-Host "Checking function app status..."
+                az functionapp show --name $(functionAppName) --resource-group $(resourceGroupName) --query "state"
+                Write-Host "Listing functions..."
+                az functionapp function list --name $(functionAppName) --resource-group $(resourceGroupName)
+            displayName: 'Verify deployment status'
