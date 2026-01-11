@@ -1,13 +1,15 @@
+import azure.functions as func
 import requests
 import logging
 import os
 
-def send_email_via_graph(access_token, sender, recipient, expiry_date, user_name):    
+
+def send_email_via_graph(access_token, sender, recipient, expiry_date, user_name):
     graph_url = f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail"
     recipient_temp = os.environ.get("X_RECIPIENT_TEMP", "")
     headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
     }
     email_data = {
         "message": {
@@ -41,7 +43,7 @@ Mail: support.abcd@defg.se
 
 Med vänliga hälsningar
 AAbcd
-"""
+""",
             },
             "toRecipients": [
                 {
@@ -49,19 +51,20 @@ AAbcd
                         "address": recipient if recipient_temp == "" else recipient_temp
                     }
                 }
-            ]
+            ],
         },
-        "saveToSentItems": "true"
+        "saveToSentItems": "true",
     }
-    try:
-        response = requests.post(graph_url, headers=headers, json=email_data)
-    except Exception as e:
-        logging.error(f"Error during POST request to https://graph.microsoft.com/v1.0/users/{sender}/sendMail: {e}")
-        raise Exception("Error") 
+
+    response = requests.post(graph_url, headers=headers, json=email_data)
 
     if response.status_code == 202:
         logging.warning("✓ Email sent successfully via Graph API!")
     else:
-        logging.error(f"✗ Could not send email: {response.status_code} - {response.text}")
-        raise Exception("Error") 
-
+        logging.error(
+            f"✗ Could not send email: {response.status_code} - {response.text}"
+        )
+        return func.HttpResponse(
+            f"{response.text}",
+            status_code=500,
+        )

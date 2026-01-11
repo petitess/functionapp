@@ -1,6 +1,7 @@
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import RunCommandInput
+import azure.functions as func
 import logging
 import requests
 import datetime
@@ -24,7 +25,7 @@ def get_user_list():
 
     run_command_input = RunCommandInput(
         command_id="RunPowerShellScript",
-        script=["C:\B3\AdPasswordExpiration.ps1"],
+        script=["C:\Script\AdPasswordExpiration.ps1"],
     )
 
     poller = compute_client.virtual_machines.begin_run_command(
@@ -48,10 +49,7 @@ def get_user_list():
         "x-ms-version": "2020-04-08",
         "Accept": "application/json;odata=fullmetadata",
     }
-    try:
-        response = requests.get(url, headers=headers)
-    except Exception as e:
-        logging.error(f"Error during GET request to Azure Table Storage: {e}")
+    response = requests.get(url, headers=headers)
     data = response.json()
     entities.extend(data.get("value", []))
 
@@ -60,6 +58,10 @@ def get_user_list():
     else:
         logging.error(
             f"Could not fetch entities: {response.status_code} - {response.text}"
+        )
+        return func.HttpResponse(
+            f"{response.text}",
+            status_code=500,
         )
 
     for e in entities:
@@ -73,16 +75,14 @@ def get_user_list():
             e["ExpiryDate"],
             e["Name"],
         )
-        try:
-            response = requests.delete(e["odata.id"], headers=headers)
-        except Exception as e:
-            logging.error(f"Error during DELETE request: {e}")
-            raise Exception("Error")
-
+        response = requests.delete(e["odata.id"], headers=headers)
         if response.status_code == 204:
             logging.warning(f"6.Deleted entity.")
         else:
             logging.error(
                 f"Could not delete entity: {response.status_code} - {response.text}"
             )
-            raise Exception("Error")
+            return func.HttpResponse(
+                f"{response.text}",
+                status_code=500,
+            )
