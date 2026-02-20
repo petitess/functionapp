@@ -1,0 +1,80 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - func
+
+schedules:
+ - cron: 0 0 * * *
+   branches:
+     include:
+       - main
+   always: true
+
+pool:
+  vmImage: $(RUNNER)
+
+variables:
+  azureSubscription: sp-grafana-prod
+  environment: prod
+  workingDirectory: "./func"
+
+stages:
+  - stage: build
+    displayName: Build
+    jobs:
+      - job: build
+        displayName: Build
+        steps:
+          - checkout: self
+          - task: UsePythonVersion@0
+            displayName: Use Python 3.x
+            inputs:
+              versionSpec: "3.x"
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -r requirements.txt --target=".python_packages/lib/site-packages"
+            displayName: "Install Python dependencies"
+            workingDirectory: "$(workingDirectory)"
+
+          - task: ArchiveFiles@2
+            inputs:
+              rootFolderOrFile: "$(workingDirectory)"
+              includeRootFolder: false
+              archiveType: "zip"
+              archiveFile: "$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip"
+              replaceExistingArchive: true
+              verbose: true
+            displayName: "Create deployment package"
+
+          - publish: "$(Build.ArtifactStagingDirectory)"
+            artifact: "func"
+            displayName: "Publish build artifacts"
+
+  - stage: release
+    displayName: Release
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: release
+        displayName: Release
+        environment: ${{ variables.environment }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  displayName: Download artifact
+                  artifact: func
+
+                - task: AzureFunctionApp@2
+                  displayName: Deploy Azure Function
+                  inputs:
+                    azureSubscription: ${{ variables.azureSubscription }}
+                    isFlexConsumption: true
+                    appType: functionAppLinux
+                    appName: func-grf-jb-${{ variables.environment }}-01
+                    deploymentMethod: "zipDeploy"
+                    package: $(Agent.BuildDirectory)/**/*.zip
