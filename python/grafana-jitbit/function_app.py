@@ -50,14 +50,14 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
         alert_event_type = req_body.get("event", {}).get("type")
         alert_title = req_body.get("alert_group", {}).get("title")
         alert_group_id = req_body.get("alert_group_id")
-        alert_user_email = "opsgenie@b3.se"
+        alert_user_email = "opsgenie@a3.se"
         user = req_body.get("user", {})
         if isinstance(user, dict):
-            alert_user_email = req_body.get("user", {}).get("email", "opsgenie@b3.se")
+            alert_user_email = req_body.get("user", {}).get("email", "opsgenie@a3.se")
         ticket_cat = (
             req_body.get("alert_group", {})
             .get("labels", {})
-            .get("Cat", "Övervakning / Larm")
+            .get("source", "Övervakning / Larm")
         )
         alertRuleID = f"{req_body.get('alert_payload', {}).get('data', {}).get('essentials', {}).get('alertRuleID', '')}"
         alert_description = (
@@ -66,24 +66,30 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
             .get("essentials", {})
             .get("description", "")
         )
+        alert_message = req_body.get("alert_payload", {}).get("message", {})
 
-        all_of = (
+        condition = (
             req_body.get("alert_payload", {})
             .get("data", {})
             .get("alertContext", {})
-            .get("condition", {})
-            .get("allOf")
+            .get("condition")
         )
-        if isinstance(all_of, list) and len(all_of) > 0 and isinstance(all_of[0], dict):
-            query = all_of[0].get("linkToSearchResultsUI", "no_query")
+        if not isinstance(condition, dict):
+            logging.warning(f"EXPECTED condition dict but got: {type(condition)}")
+            all_of = ""
         else:
-            query = "no_query"
+            all_of = condition.get("allOf", "")
+
+        if isinstance(all_of, list) and len(all_of) > 0 and isinstance(all_of[0], dict):
+            query = all_of[0].get("linkToSearchResultsUI", "")
+        else:
+            query = ""
         ticket_description = (
             f"{url_grafana}/a/grafana-irm-app/alert-groups/{alert_group_id}\n"
             "---------------\n"
             f"{query}\n"
             "---------------\n"
-            f"{alert_description or alertRuleID}"
+            f"{alert_message or alert_description or alertRuleID}"
         )
 
     logging.warning(f"1.ALERT_TYPE: {alert_event_type}")
@@ -105,8 +111,11 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
 
     if alert_event_type == "alert group created":
         logging.warning("ACTION: new alert group has been created")
+        resolution_notes = req_body.get("alert_group", {}).get("resolution_notes", [])
 
-        response_cat = requests.get(f"{url_jitbit}/categories", headers=headers_jitbit)
+        response_cat = requests.get(
+            f"{url_jitbit}/categories", headers=headers_jitbit
+        )
         logging.warning(f"CATEGORY_LIST: {response_cat.ok}")
 
         category_id = next(
@@ -149,20 +158,23 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
         )
         logging.warning(f"FIELD_UPDATED: {response_field.ok}")
 
-        response_resolution_note = requests.post(
-            f"{url_grafana_oncall}/api/v1/resolution_notes/",
-            headers=headers_grafana,
-            json={
-                "alert_group_id": alert_group_id,
-                "text": ticket_id,
-            },
-        )
-        logging.warning(f"NOTE_ADDED: {response_resolution_note.ok}")
-        if not response_resolution_note.ok:
-            return func.HttpResponse(
-                f"NOTE_ADDED: {response_resolution_note.ok}",
-                status_code=500,
+        if resolution_notes is None or len(resolution_notes) == 0:
+            response_resolution_note = requests.post(
+                f"{url_grafana_oncall}/api/v1/resolution_notes/",
+                headers=headers_grafana,
+                json={
+                    "alert_group_id": alert_group_id,
+                    "text": ticket_id,
+                },
             )
+            logging.warning(f"NOTE_ADDED: {response_resolution_note.ok}")
+            if not response_resolution_note.ok:
+                return func.HttpResponse(
+                    f"NOTE_ADDED: {response_resolution_note.ok}",
+                    status_code=500,
+                )
+        else:
+            logging.warning(f"NOTE_ALREADY_EXISTS")
 
     elif alert_event_type == "acknowledge":
         resolution_notes = req_body.get("alert_group", {}).get("resolution_notes", [])
@@ -196,7 +208,7 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
                     "id": resolution_notes[0],
                     "body": f"Alert was acknowledged by {alert_user_email}",
                     "forTechsOnly": True,
-                    "recipientIds": None,
+                    "recipientIds": 2,
                 },
                 headers=headers_jitbit,
             )
@@ -219,14 +231,14 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
                 "id": resolution_notes[0],
                 "body": f"Alert was closed by {alert_user_email}",
                 "forTechsOnly": True,
-                "recipientIds": None,
+                "recipientIds": 2,
             },
             headers=headers_jitbit,
         )
         logging.warning(f"8.COMMENT: {response_comment.ok}")
 
         response_resolve = requests.post(
-            f"{url_jitbit}/Close?id={resolution_notes[0]}&suppressNotification=true",
+            f"{url_jitbit}/Close",
             params={
                 "id": resolution_notes[0],
                 "suppressNotification": True,
@@ -273,7 +285,7 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
                     "id": resolution_notes[0],
                     "body": f"Alert was unacknowledged by {alert_user_email}",
                     "forTechsOnly": True,
-                    "recipientIds": None,
+                    "recipientIds": 2,
                 },
                 headers=headers_jitbit,
             )
